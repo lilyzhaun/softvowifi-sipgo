@@ -1,5 +1,5 @@
 > **Private maintenance repository (Issue 35, checked 2026-09-15)**: [lilyzhaun/softvowifi-sipgo](https://github.com/lilyzhaun/softvowifi-sipgo) exists and is PRIVATE. `lilyzhaun` owns the repository and final integration; `newdamm` contributes reviewed maintenance PRs. The write invitation is **PENDINGINVITATION** at this check, not confirmed access; only `newdamm` can accept it. No admin permission was granted.
-> Module path remains `github.com/emiago/sipgo`. SoftVoWiFi's verified migration candidate uses `replace github.com/emiago/sipgo v1.4.3 => github.com/lilyzhaun/softvowifi-sipgo v0.0.0-20260915075721-59e490add69c`, pinning commit `59e490add69cf7ab779ee4fe4a5d90e390469806`, not the latest maintenance `main` HEAD. This documentation-only update advances `main` without changing that pin, production code, module files or licenses; the main-repository migration still awaits final acceptance.
+> Module path remains `github.com/emiago/sipgo`. SoftVoWiFi's verified migration candidate uses `replace github.com/emiago/sipgo v1.4.3 => github.com/lilyzhaun/softvowifi-sipgo v0.0.0-20260915075721-59e490add69c`, pinning commit `59e490add69cf7ab779ee4fe4a5d90e390469806`, not the latest maintenance `main` HEAD. The 2026-09-15 documentation-only update did not change that pin, production code, module files or licenses. The terminal-error maintenance below also requires a separate consumer pin update.
 > The initial snapshot was imported from SoftVoWiFi commit `8ca6114de2c915473165bf0698a09ced0f9108e3`, path `engine/third_party/sipgo`. This maintenance README replaces, rather than reproduces, the upstream README; [LICENSE](LICENSE), attribution and source metadata below are preserved. PRIVATE is not legal or public-release clearance. This is a private snapshot import, not a GitHub fork-network claim.
 > Canonical policy: `engine/third_party/manifest.json` in SoftVoWiFi; handoff: `docs/第三方Go依赖维护与导出.md`. The initial-import text below, including "maintained local copy" and `./third_party/sipgo`, is historical, not current integration guidance. Upstream metadata does not identify the patched tree. Future code changes require review and a separately verified pin update.
 
@@ -91,3 +91,57 @@ Checksums of the original unmodified v1.4.3 files used as the import baseline:
 - `sip/transport_tcp.go`: `39b4a772da6f73e8b660426b052b6d1883c675584c388ab89f223e49ee081379`
 - `sip/transport_layer.go`: `b47a1457ce90c73a83551ebd3123e9a7cd8ea9edf4ecce7afe26a31797c8ec7c`
 - `sip/transport_udp.go`: `d67e76fdbde305b10ce2946c3ec1b33be345bb776aa578abe2aa777f61c2908e`
+
+## Terminal-error maintenance (2026-09-16)
+
+Based on private `main` commit `96953e4499bcac9b930d107d4fcfa27dc51eca26`.
+This is an original maintenance change, not an upstream import; module paths,
+dependencies, root LICENSE bytes and the attribution above remain unchanged.
+The dated inventory above describes the earlier snapshot, not this new patch.
+
+| Changed production file | Purpose |
+|---|---|
+| `sip/transaction.go` | Read the published terminal error under `mu`, then release it before any live-FSM error read under `fsmMu` |
+| `sip/transaction_client_tx.go` | Publish cancellation before Done; invoke the captured callback outside `mu`; no FSM lock in Terminate |
+| `sip/transaction_server_tx.go` | Publish termination before Done; no FSM lock in Terminate |
+
+The winning `delete` publishes its non-nil error before closing Done under the
+existing closed guard. The two FSM deletion actions already supply a classified
+error on normal completion; timeout and transport causes remain intact when
+they win termination. Responses stay open. Callbacks and connection release
+remain outside `mu`. An OnTerminate callback may now read Err, including when
+the FSM initiated deletion while holding `fsmMu`; other FSM operations remain
+unsafe from such a callback.
+
+Small API correction: explicit client Terminate callbacks now receive
+`ErrTransactionCanceled`, matching Err, rather than the previous inconsistent
+`ErrTransactionTerminated`. Server Terminate remains Terminated. The retained
+transaction-layer callbacks ignore the error; the retained dialog callback is
+server-side. SoftVoWiFi's production OnTerminate consumer is also server-side
+registry removal and ignores the error.
+
+Added tests: `sip/transaction_terminal_test.go` (publication barrier,
+concurrent idempotence, FSM terminal causes, callback Err and blocked response
+delivery) and `sip/transaction_terminal_udp_test.go` (real UDP/TransactionLayer
+Client.Do shutdown, explicit termination, context cancellation and 200).
+Four top-level groups, no production test hooks or sleep-based scheduling.
+The callback barrier deterministically failed before the patch: Done/Err was
+nil for client and server, and Client.Do returned `(nil, nil)` for shutdown
+and explicit termination. The 200 and context-cancellation controls passed.
+
+Go 1.26.0 validation, `GOMAXPROCS=2 GOFLAGS=-mod=readonly`:
+
+```sh
+go test -p 1 -race -count=20 -timeout=60s ./sip -run '^TestTerminal'
+go test -p 1 -race -shuffle=on -count=1 -timeout=120s ./...
+go vet -p 1 ./...
+```
+
+Both test commands passed. Full vet exits 1 on the existing unkeyed HeaderKV
+literals in `client.go:496-497`; those previously reported older-toolchain
+warnings also occur with Go 1.26.0 and are not fixed here. Existing UDP
+reference-count warnings occur in both RED and GREEN runs and remain out of
+scope. The retained suite is not the complete upstream suite. External
+SoftVoWiFi IMS termination and MESSAGE/RP tests also passed using an isolated
+consumer module file pointing to this clone; this does not update production
+pins or establish device/carrier acceptance.

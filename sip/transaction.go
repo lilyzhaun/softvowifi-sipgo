@@ -153,9 +153,10 @@ type baseTx struct {
 	key    string
 	origin *Request
 
-	conn   Connection
-	done   chan struct{}
-	closed bool
+	conn    Connection
+	done    chan struct{}
+	closed  bool
+	termErr error
 
 	//State machine control
 	fsmMu    sync.Mutex
@@ -195,7 +196,7 @@ func (tx *baseTx) Done() <-chan struct{} {
 
 // OnTerminate is experimental
 // Callback function can not call any fsm related functions as it will cause deadlock like.
-// Err must not be called,instead error is passed
+// Err may be called to read the published terminal error.
 func (tx *baseTx) OnTerminate(f FnTxTerminate) bool {
 	tx.mu.Lock()
 	select {
@@ -280,8 +281,14 @@ func (tx *baseTx) spinFsmWithError(in fsmInput, err error) {
 }
 
 func (tx *baseTx) Err() error {
+	tx.mu.Lock()
+	err := tx.termErr
+	tx.mu.Unlock()
+	if err != nil {
+		return err
+	}
 	tx.fsmMu.Lock()
-	err := tx.fsmErr
+	err = tx.fsmErr
 	tx.fsmMu.Unlock()
 	return err
 }

@@ -123,11 +123,7 @@ func (tx *ClientTx) Terminate() {
 	// default:
 	// }
 
-	if tx.delete(ErrTransactionTerminated) {
-		tx.fsmMu.Lock()
-		tx.fsmErr = ErrTransactionCanceled
-		tx.fsmMu.Unlock()
-	}
+	tx.delete(ErrTransactionCanceled)
 }
 
 // Receive will process response in safe way and change transaction state
@@ -227,6 +223,7 @@ func (tx *ClientTx) delete(err error) bool {
 		return false
 	}
 	tx.closed = true
+	tx.termErr = err
 
 	close(tx.done)
 	onterm := tx.onTerminate
@@ -246,7 +243,7 @@ func (tx *ClientTx) delete(err error) bool {
 	tx.mu.Unlock()
 	// Maybe there is better way
 	if onterm != nil {
-		tx.onTerminate(tx.key, err)
+		onterm(tx.key, err)
 	}
 
 	if _, err := tx.conn.TryClose(); err != nil {

@@ -153,12 +153,7 @@ func (tx *ServerTx) ackSendAsync(r *Request) {
 
 func (tx *ServerTx) Terminate() {
 	tx.log.Debug("Server transaction terminating", "tx", tx.Key())
-	if tx.delete(ErrTransactionTerminated) {
-		// TODO: remove this double locking
-		tx.fsmMu.Lock()
-		tx.fsmErr = ErrTransactionTerminated
-		tx.fsmMu.Unlock()
-	}
+	tx.delete(ErrTransactionTerminated)
 }
 
 // TerminateGracefully allows retransmission to happen before shuting down transaction
@@ -230,6 +225,7 @@ func (tx *ServerTx) delete(err error) bool {
 		return false
 	}
 	tx.closed = true
+	tx.termErr = err
 	close(tx.done)
 
 	if tx.timer_i != nil {
