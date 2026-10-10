@@ -1,147 +1,123 @@
-> **Private maintenance repository (Issue 35, checked 2026-09-15)**: [lilyzhaun/softvowifi-sipgo](https://github.com/lilyzhaun/softvowifi-sipgo) exists and is PRIVATE. `lilyzhaun` owns the repository and final integration; `newdamm` contributes reviewed maintenance PRs. The write invitation is **PENDINGINVITATION** at this check, not confirmed access; only `newdamm` can accept it. No admin permission was granted.
-> Module path remains `github.com/emiago/sipgo`. SoftVoWiFi's verified migration candidate uses `replace github.com/emiago/sipgo v1.4.3 => github.com/lilyzhaun/softvowifi-sipgo v0.0.0-20260915075721-59e490add69c`, pinning commit `59e490add69cf7ab779ee4fe4a5d90e390469806`, not the latest maintenance `main` HEAD. The 2026-09-15 documentation-only update did not change that pin, production code, module files or licenses. The terminal-error maintenance below also requires a separate consumer pin update.
-> The initial snapshot was imported from SoftVoWiFi commit `8ca6114de2c915473165bf0698a09ced0f9108e3`, path `engine/third_party/sipgo`. This maintenance README replaces, rather than reproduces, the upstream README; [LICENSE](LICENSE), attribution and source metadata below are preserved. PRIVATE is not legal or public-release clearance. This is a private snapshot import, not a GitHub fork-network claim.
-> Canonical policy: `engine/third_party/manifest.json` in SoftVoWiFi; handoff: `docs/第三方Go依赖维护与导出.md`. The initial-import text below, including "maintained local copy" and `./third_party/sipgo`, is historical, not current integration guidance. Upstream metadata does not identify the patched tree. Future code changes require review and a separately verified pin update.
+# softvowifi-sipgo
 
-# sipgo (maintained local copy)
+[![CI](https://github.com/lilyzhaun/softvowifi-sipgo/actions/workflows/ci.yml/badge.svg)](https://github.com/lilyzhaun/softvowifi-sipgo/actions/workflows/ci.yml)
 
-This directory is a maintained source copy of [emiago/sipgo](https://github.com/emiago/sipgo) for the SoftVoWiFi engine.
+**English** · [简体中文](README.zh-CN.md)
 
-- Module path: `github.com/emiago/sipgo`
-- Import baseline version: `v1.4.3` (not an unmodified description of this maintained tree)
-- Upstream VCS: `https://github.com/emiago/sipgo`
-- Exact commit: `769e4bc958376e2363566c8f7042202b410becdc`
-- License: BSD-2-Clause (see [LICENSE](LICENSE))
-- Original module zip SHA-256: `6fd9c6d280f2b7d2a93de21b73f06f1e35b3064cae6cdd5226a5beec4b8ebe76`
+A public maintained snapshot of [emiago/sipgo](https://github.com/emiago/sipgo),
+focused on SIP stream parsing, connection reuse and transaction lifecycle behavior.
+Imports remain `github.com/emiago/sipgo` and `github.com/emiago/sipgo/sip`.
 
-## Retained scope
+This is an independent snapshot, not an official upstream release or complete
+mirror. It supplies SIP signaling primitives—not a full IMS client, SIM/AKA
+provider, IPsec tunnel, RTP codec stack or certified VoWiFi application.
 
-Kept from upstream v1.4.3:
+## Maintained behavior
 
-- Root production Go (`ua.go`, `client.go`, `server.go`, `dialog*.go`)
-- `sip/` production Go, including platform-specific files
-- `go.mod`, `go.sum`, `LICENSE`
-- Selected parser tests and helpers: `sip/parser_test.go`, `sip/parser_stream_test.go`, `sip/parser_fuzz_test.go`, `sip/testdata/fuzz`
+- Stream parsing preserves logical headers and continuations across TCP chunk
+  boundaries without changing complete-buffer parsing semantics.
+- Partial-message limits are overflow-safe and apply per message rather than to
+  an entire TCP batch. Keepalive detection does not discard split header bytes.
+- `sip.WithTransportLayerRequireExistingConnection()` opts into rejecting request
+  connection-cache misses instead of silently creating a new connection. The
+  default create-on-miss behavior is unchanged.
+- Terminal transaction errors are published before `Done` closes. Termination
+  callbacks can read `Err` without taking the active FSM lock. Explicit client
+  termination reports `ErrTransactionCanceled`; server termination remains
+  `ErrTransactionTerminated`.
 
-Not retained: examples, CI, icons, dialog/server/client integration tests, `siptest/`, `fakes/`, torture corpora, and unrelated transport tests.
+Retained root and `sip/` production sources include client, server, dialog and
+transport helpers. Only selected upstream tests and additional focused regressions
+are retained; this is **not** the full upstream integration or torture suite.
+See [PROVENANCE.md](PROVENANCE.md) for the baseline and patch inventory.
 
-Engine wiring uses a version-scoped replace only:
+## Requirements
 
-```
-replace github.com/emiago/sipgo v1.4.3 => ./third_party/sipgo
-```
+`go.mod` declares Go 1.23.0 and requests toolchain Go 1.24.2. CI uses Go 1.26 on
+Linux; other platforms should be checked for the APIs your integration uses.
+The parser example below has no network or privilege requirements.
 
-`engine/go.mod` versions are otherwise unchanged; `go mod tidy` is not part of this copy.
+## Use the maintained snapshot
 
-## Local diff purpose
-
-The copy exists to keep stream parsing correct on TCP fragment boundaries without changing the public complete-buffer parser.
-
-1. Stream-only: a non-empty logical header that ends exactly at the current chunk must return `io.ErrUnexpectedEOF` with consumed `0` before `ParseHeader`. The whole logical header, including continuations, stays in the buffer. A terminator blank line is still consumed immediately. `Parse` / `ParseHeaders` complete-buffer semantics are unchanged; there is no `n < len(data)` deletion.
-2. Partial-message growth is checked against `MaxMessageLength` before awaiting more data or allocating a body. The budget is overflow-safe and per message, not for a whole TCP batch. On limit, transports stop further reads and release the parser under the existing error contract. Fully consumed oversized messages still recover as upstream did.
-3. TCP keepalive CRLF detection only applies at start-line with an empty parser buffer, so a header-section `\r` / `\n` split is not dropped. Non-partial parse errors stop the TCP read loop and close the parser.
-4. Opt-in `WithTransportLayerRequireExistingConnection` (default false) makes `ClientRequestConnection` and `serverRequestConnection` fail on UDP cache miss/closed/reuse-key mismatch before `CreateConnection`. Default remains the upstream create-on-miss behavior. `WriteMsg` of a Response still only looks up an existing connection. Existing `WithTransportLayerReadFilter` can drop datagrams before parse without stopping the read loop.
-
-This is not a new framer and does not upgrade other dependencies.
-
-## Source-readiness inventory (2026-09-15)
-
-The locally cached `github.com/emiago/sipgo/@v/v1.4.3.info` records commit
-`769e4bc958376e2363566c8f7042202b410becdc` and `refs/tags/v1.4.3`.
-The matching local module zip is the comparison source; this is not fresh
-remote-history or availability verification.
-
-Five retained production files differ from that zip:
-
-| File | Maintained difference |
-|---|---|
-| `sip/parser.go` | Stream-aware logical-header boundary; complete-buffer callers pass false |
-| `sip/parser_stream.go` | Partial-message length checks, overflow-safe body budget, stream-header call and simplified buffer write |
-| `sip/transport_layer.go` | Opt-in existing-connection requirement for client and server request paths |
-| `sip/transport_tcp.go` | Keepalive boundary, parser close, stop on non-partial errors, omit raw packet data from parse-error logs |
-| `sip/transport_udp.go` | Atomic `CreateConnection` attempt counter used by regression tests |
-
-Four added tests, all under `sip/`: `parser_public_test.go`,
-`parser_stream_boundary_test.go`, `transport_require_existing_test.go`, and
-`transport_require_existing_server_test.go`. `WithTransportLayerReadFilter`
-was already present in the cached baseline, not introduced by these patches.
-README replacement is an additional documentation difference, not a sixth
-production-code patch. The upstream test suite is only partially retained.
-
-The cached upstream README's Credits section states:
-
-> This project was influenced by [gosip](https://github.com/ghettovoice/gosip), project by @ghetovoice, but started as new project to achieve best/better performance and to improve API.
-> This unfortunately required many design changes, therefore this libraries are not compatible.
-
-That is the upstream author's statement, not independent proof that no code
-was copied. The upstream README also thanks [pion](https://github.com/pion/webrtc)
-for sharing the [SIPgo/WebRTC example](https://github.com/pion/example-webrtc-applications/tree/master/sip-to-webrtc);
-examples are outside this retained subset. These source notes do not clear
-all provenance or distribution risks. The cached version's BSD-2-Clause
-LICENSE retains `Copyright (c) 2022, Emir Aganovic.` and `All rights reserved.`;
-do not generalize that license to other versions or dependencies.
-
-Checksums of the original unmodified v1.4.3 files used as the import baseline:
-
-- `LICENSE`: `81e1a2bcb702a0103d3ae3c4fc6c3866d227d9effaaa4b7b801f7ffdaf8cee64`
-- `go.mod`: `a6b48c779ce33d7f4805a85295f66d5459504854c716e64174131f791544987c`
-- `go.sum`: `bb8ee93953e451b8036dde71e7b93cc1e932d9ec5570b6dcdc32a98ea0730d59`
-- `sip/parser.go`: `2d1cbcbc9af77daee730783baca3483179106eb0e70f9fdf283f55f753ae9e81`
-- `sip/parser_stream.go`: `e15bcb08bf35701a580ca762d2663142d1d81f879646d150dfe7ef5e791f330e`
-- `sip/transport_tcp.go`: `39b4a772da6f73e8b660426b052b6d1883c675584c388ab89f223e49ee081379`
-- `sip/transport_layer.go`: `b47a1457ce90c73a83551ebd3123e9a7cd8ea9edf4ecce7afe26a31797c8ec7c`
-- `sip/transport_udp.go`: `d67e76fdbde305b10ce2946c3ec1b33be345bb776aa578abe2aa777f61c2908e`
-
-## Terminal-error maintenance (2026-09-16)
-
-Based on private `main` commit `96953e4499bcac9b930d107d4fcfa27dc51eca26`.
-This is an original maintenance change, not an upstream import; module paths,
-dependencies, root LICENSE bytes and the attribution above remain unchanged.
-The dated inventory above describes the earlier snapshot, not this new patch.
-
-| Changed production file | Purpose |
-|---|---|
-| `sip/transaction.go` | Read the published terminal error under `mu`, then release it before any live-FSM error read under `fsmMu` |
-| `sip/transaction_client_tx.go` | Publish cancellation before Done; invoke the captured callback outside `mu`; no FSM lock in Terminate |
-| `sip/transaction_server_tx.go` | Publish termination before Done; no FSM lock in Terminate |
-
-The winning `delete` publishes its non-nil error before closing Done under the
-existing closed guard. The two FSM deletion actions already supply a classified
-error on normal completion; timeout and transport causes remain intact when
-they win termination. Responses stay open. Callbacks and connection release
-remain outside `mu`. An OnTerminate callback may now read Err, including when
-the FSM initiated deletion while holding `fsmMu`; other FSM operations remain
-unsafe from such a callback.
-
-Small API correction: explicit client Terminate callbacks now receive
-`ErrTransactionCanceled`, matching Err, rather than the previous inconsistent
-`ErrTransactionTerminated`. Server Terminate remains Terminated. The retained
-transaction-layer callbacks ignore the error; the retained dialog callback is
-server-side. SoftVoWiFi's production OnTerminate consumer is also server-side
-registry removal and ignores the error.
-
-Added tests: `sip/transaction_terminal_test.go` (publication barrier,
-concurrent idempotence, FSM terminal causes, callback Err and blocked response
-delivery) and `sip/transaction_terminal_udp_test.go` (real UDP/TransactionLayer
-Client.Do shutdown, explicit termination, context cancellation and 200).
-Four top-level groups, no production test hooks or sleep-based scheduling.
-The callback barrier deterministically failed before the patch: Done/Err was
-nil for client and server, and Client.Do returned `(nil, nil)` for shutdown
-and explicit termination. The 200 and context-cancellation controls passed.
-
-Go 1.26.0 validation, `GOMAXPROCS=2 GOFLAGS=-mod=readonly`:
+In an existing Go module:
 
 ```sh
-go test -p 1 -race -count=20 -timeout=60s ./sip -run '^TestTerminal'
-go test -p 1 -race -shuffle=on -count=1 -timeout=120s ./...
-go vet -p 1 ./...
+go mod edit -replace=github.com/emiago/sipgo@v1.4.3=github.com/lilyzhaun/softvowifi-sipgo@v0.0.0-20260916002955-f30e2a8e5daa
+go get github.com/emiago/sipgo@v1.4.3
+go list -m -json github.com/emiago/sipgo
 ```
 
-Both test commands passed. Full vet exits 1 on the existing unkeyed HeaderKV
-literals in `client.go:496-497`; those previously reported older-toolchain
-warnings also occur with Go 1.26.0 and are not fixed here. Existing UDP
-reference-count warnings occur in both RED and GREEN runs and remain out of
-scope. The retained suite is not the complete upstream suite. External
-SoftVoWiFi IMS termination and MESSAGE/RP tests also passed using an isolated
-consumer module file pointing to this clone; this does not update production
-pins or establish device/carrier acceptance.
+This example pins the reviewed maintained transaction/parser code, not moving
+`main`. The replacement is **version-scoped**: if module version selection moves
+the original module away from `v1.4.3`, this replacement will not apply to that
+other version. Inspect `go list`'s `Replace` entry rather than assuming the fork
+is active. Keep original imports; the repository URL is not a new module path.
+
+## Offline parsing example
+
+The message uses synthetic identities and a reserved `.invalid` domain. It does
+not listen on a port, send SIP traffic or authenticate a real subscriber.
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/emiago/sipgo/sip"
+)
+
+func main() {
+	wire := "OPTIONS sip:service@example.invalid SIP/2.0\r\n" +
+		"Via: SIP/2.0/UDP 127.0.0.1:5060;branch=z9hG4bK-docs\r\n" +
+		"From: <sip:alice@example.invalid>;tag=docs\r\n" +
+		"To: <sip:service@example.invalid>\r\n" +
+		"Call-ID: docs@example.invalid\r\n" +
+		"CSeq: 1 OPTIONS\r\n" +
+		"Max-Forwards: 70\r\n" +
+		"Content-Length: 0\r\n\r\n"
+	message, err := sip.ParseMessage([]byte(wire))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Parsed %T\n", message)
+}
+```
+
+## Develop and test
+
+```sh
+git clone https://github.com/lilyzhaun/softvowifi-sipgo.git
+cd softvowifi-sipgo
+go test -p 1 -race -shuffle=on -count=1 -timeout=120s ./...
+go vet -p 1 -composites=false ./...
+```
+
+Full vet has a recorded legacy warning for unkeyed `sip.HeaderKV` literals in
+`client.go`. CI disables the **whole composites analyzer** while running the
+other default analyzers; it does not claim a clean full-vet result. Retained
+source formatting is reported, not automatically rewritten. Synthetic/loopback
+tests do not prove interoperability with an IMS network or a SIP carrier.
+
+## Contribute, report and stay safe
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md), the [code of conduct](CODE_OF_CONDUCT.md)
+and [security policy](SECURITY.md). Use the
+[issue templates](https://github.com/lilyzhaun/softvowifi-sipgo/issues/new/choose)
+for non-security defects and suggestions. Real SIP may contain credentials,
+phone numbers, message bodies and authentication material: provide synthetic
+reproductions rather than full logs, configuration or packet captures.
+
+## License and credits
+
+The original [BSD-2-Clause LICENSE](LICENSE), including Emir Aganovic's copyright,
+is preserved. Credit for the upstream SIP implementation belongs to
+[emiago/sipgo](https://github.com/emiago/sipgo). Its documented influences and
+example acknowledgments include [gosip](https://github.com/ghettovoice/gosip)
+and [Pion](https://github.com/pion/webrtc); these statements are attribution,
+not independent proof about every historical code origin.
+
+[PROVENANCE.md](PROVENANCE.md) and the [archived README](docs/README-imported.md)
+retain the exact v1.4.3 source record, checksums, patch notes and limitations.
+Old private-migration instructions in that archive are not current setup steps.

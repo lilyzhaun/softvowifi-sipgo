@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private vulnerability report / 私密漏洞报告
+    url: https://github.com/lilyzhaun/softvowifi-sipgo/security/advisories/new
+    about: Do not disclose vulnerabilities or real SIP credentials publicly.
+  - name: Documentation / 使用说明
+    url: https://github.com/lilyzhaun/softvowifi-sipgo#readme
+    about: Check version-scoped replacement, examples and retained-suite limitations.

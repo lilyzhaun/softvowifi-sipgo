@@ -1,0 +1,25 @@
+name: Feature request / 功能建议
+description: Explain the signaling use case and compatibility requirements.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Use case and current limitation
+      description: Distinguish a library capability from a carrier or consuming-app requirement.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API, alternatives and testing
+      description: Include complete-buffer/stream behavior, compatibility and transport implications.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: This proposal contains no real credentials, subscriber data or raw captures.
+          required: true
