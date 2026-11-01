@@ -43,12 +43,16 @@ func WithTransactionLayerTimers(p TransactionTimers) (TransactionLayerOption, er
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
-	captured := transactionTimerSnapshot{T2: p.T2, A: p.T1, B: p.B, D: p.D, E: p.T1, F: p.F,
-		G: p.T1, H: p.H, I: p.T4, J: p.J, K: p.T4, L: 64 * p.T1, M: 64 * p.T1, Trying: 200 * time.Millisecond}
+	captured := p.snapshot()
 	return func(layer *TransactionLayer) {
 		value := captured
 		layer.timers = &value
 	}, nil
+}
+
+func (p TransactionTimers) snapshot() transactionTimerSnapshot {
+	return transactionTimerSnapshot{T2: p.T2, A: p.T1, B: p.B, D: p.D, E: p.T1, F: p.F,
+		G: p.T1, H: p.H, I: p.T4, J: p.J, K: p.T4, L: 64 * p.T1, M: 64 * p.T1, Trying: 200 * time.Millisecond}
 }
 
 type transactionTimerSnapshot struct {

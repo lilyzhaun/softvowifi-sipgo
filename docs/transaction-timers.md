@@ -49,6 +49,12 @@ Changing the caller's struct or another layer cannot alter an existing exchange.
 The option may be reused. The existing 200ms automatic Trying delay is retained
 for explicitly configured layers.
 
+Callers owning a transport/registry can use `NewServerTxWithTimers` directly.
+It validates and captures the same value before construction and returns an
+error for invalid input; `Init`, transport ownership and callbacks are unchanged.
+This additive entry is maintained by lilyzhaun on
+`feat/direct-server-transaction-timers-20261102`, based on `951da7d9cac6`.
+
 Without this option, a layer captures **all legacy timer variables** once at
 layer construction. Direct `NewClientTx`/`NewServerTx` callers capture them at
 transaction construction. `SetTimers` and direct variable writes are still

@@ -27,6 +27,16 @@ func NewServerTx(key string, origin *Request, conn Connection, logger *slog.Logg
 	return newServerTx(key, origin, conn, logger, captureLegacyTransactionTimers())
 }
 
+// NewServerTxWithTimers captures a validated policy for callers that own their
+// transport and registry rather than using TransactionLayer. It does not send
+// or initialize the transaction; Init and connection ownership are unchanged.
+func NewServerTxWithTimers(key string, origin *Request, conn Connection, logger *slog.Logger, timers TransactionTimers) (*ServerTx, error) {
+	if err := timers.Validate(); err != nil {
+		return nil, err
+	}
+	return newServerTx(key, origin, conn, logger, timers.snapshot()), nil
+}
+
 func newServerTx(key string, origin *Request, conn Connection, logger *slog.Logger, timers transactionTimerSnapshot) *ServerTx {
 	tx := new(ServerTx)
 	tx.timers = timers
