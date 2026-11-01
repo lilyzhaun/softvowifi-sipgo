@@ -24,7 +24,12 @@ type ServerTx struct {
 }
 
 func NewServerTx(key string, origin *Request, conn Connection, logger *slog.Logger) *ServerTx {
+	return newServerTx(key, origin, conn, logger, captureLegacyTransactionTimers())
+}
+
+func newServerTx(key string, origin *Request, conn Connection, logger *slog.Logger, timers transactionTimerSnapshot) *ServerTx {
 	tx := new(ServerTx)
+	tx.timers = timers
 	tx.key = key
 	tx.conn = conn
 
@@ -43,16 +48,16 @@ func (tx *ServerTx) Init() error {
 
 	tx.mu.Lock()
 	if !tx.reliable {
-		tx.timer_g_time = Timer_G
-		tx.timer_i_time = Timer_I
-		tx.timer_j_time = Timer_J
+		tx.timer_g_time = tx.timers.G
+		tx.timer_i_time = tx.timers.I
+		tx.timer_j_time = tx.timers.J
 	}
 	tx.mu.Unlock()
 
 	// RFC 3261 - 17.2.1
 	if tx.Origin().IsInvite() {
 		tx.mu.Lock()
-		tx.timer_1xx = time.AfterFunc(Timer_1xx, func() {
+		tx.timer_1xx = time.AfterFunc(tx.timers.Trying, func() {
 			trying := NewResponseFromRequest(
 				tx.Origin(),
 				100,

@@ -25,6 +25,10 @@ provider, IPsec tunnel, RTP codec stack or certified VoWiFi application.
   callbacks can read `Err` without taking the active FSM lock. Explicit client
   termination reports `ErrTransactionCanceled`; server termination remains
   `ErrTransactionTerminated`.
+- [Instance transaction timers](docs/transaction-timers.md) capture a complete
+  policy per layer and transaction. Non-INVITE exchanges consume E/F/K and keep
+  retransmitting after provisional responses; legacy global defaults are captured
+  at construction, not re-read during an existing exchange.
 
 Retained root and `sip/` production sources include client, server, dialog and
 transport helpers. Only selected upstream tests and additional focused regressions

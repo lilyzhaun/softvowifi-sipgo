@@ -26,8 +26,11 @@ Only selected parser tests, fuzz inputs and additional maintenance regressions
 are present, not all upstream examples, test helpers or integration/torture suites.
 
 Maintenance covers stream header boundaries and message-size budgets,
-keepalive framing, opt-in existing-connection requirements and terminal-error
-publication/callback ordering. It does not describe this tree as pure v1.4.3.
+keepalive framing, opt-in existing-connection requirements, terminal-error
+publication/callback ordering and immutable per-instance transaction clocks.
+The timer changes follow RFC3261/RFC6026 semantics and correct non-INVITE E/F/K
+selection and provisional-response retransmission. They do not describe this
+tree as pure v1.4.3 or import carrier/OEM timer profiles.
 
 The [archived README](docs/README-imported.md) preserves the full original source
 inventory, individual checksums, contributor/third-party credits and dated

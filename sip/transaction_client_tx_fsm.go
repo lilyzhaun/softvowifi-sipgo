@@ -1,6 +1,7 @@
 package sip
 
 import (
+	"math"
 	"time"
 )
 
@@ -157,7 +158,7 @@ func (tx *ClientTx) stateProceeding(s fsmInput) fsmInput {
 	case client_input_300_plus:
 		tx.fsmState, spinfn = tx.stateCompleted, tx.actFinal
 	case client_input_timer_a:
-		tx.fsmState, spinfn = tx.stateProceeding, tx.actResend
+		tx.fsmState, spinfn = tx.stateProceeding, tx.actResendProceeding
 	case client_input_timer_b:
 		tx.fsmState, spinfn = tx.stateTerminated, tx.actTimeout
 	case client_input_transport_err:
@@ -198,7 +199,7 @@ func (tx *ClientTx) stateTerminated(s fsmInput) fsmInput {
 func (tx *ClientTx) actInviteResend() fsmInput {
 	tx.mu.Lock()
 
-	tx.timer_a_time *= 2
+	tx.timer_a_time = doubledTimerInterval(tx.timer_a_time, time.Duration(math.MaxInt64))
 
 	if tx.timer_a != nil {
 		tx.timer_a.Reset(tx.timer_a_time)
@@ -221,11 +222,8 @@ func (tx *ClientTx) actResend() fsmInput {
 
 	tx.mu.Lock()
 
-	tx.timer_a_time *= 2
-	// For non-INVITE, cap timer A at T2 seconds.
-	if tx.timer_a_time > T2 {
-		tx.timer_a_time = T2
-	}
+	// Non-INVITE Timer E doubles in Trying, capped at captured T2.
+	tx.timer_a_time = doubledTimerInterval(tx.timer_a_time, tx.timers.T2)
 
 	if tx.timer_a != nil {
 		tx.timer_a.Reset(tx.timer_a_time)
@@ -256,6 +254,18 @@ func (tx *ClientTx) actInviteProceeding() fsmInput {
 
 	tx.mu.Unlock()
 
+	return FsmInputNone
+}
+
+func (tx *ClientTx) actResendProceeding() fsmInput {
+	tx.mu.Lock()
+	// RFC3261 17.1.2.2: after E fires in Proceeding, use T2 directly.
+	tx.timer_a_time = tx.timers.T2
+	if tx.timer_a != nil {
+		tx.timer_a.Reset(tx.timer_a_time)
+	}
+	tx.mu.Unlock()
+	tx.resend()
 	return FsmInputNone
 }
 
@@ -349,7 +359,7 @@ func (tx *ClientTx) actAckResend() fsmInput {
 		select {
 		case <-tx.done:
 			return FsmInputNone
-		case <-time.After(T2):
+		case <-time.After(tx.timers.T2):
 		}
 	}
 	tx.ack()
@@ -374,7 +384,6 @@ func (tx *ClientTx) actTimeout() fsmInput {
 
 func (tx *ClientTx) actPassup() fsmInput {
 	tx.fsmPassUp()
-	tx.stopTimerA()
 	return FsmInputNone
 }
 
@@ -402,7 +411,7 @@ func (tx *ClientTx) actPassupAccept() fsmInput {
 		tx.timer_b = nil
 	}
 
-	tx.timer_m = time.AfterFunc(Timer_M, func() {
+	tx.timer_m = time.AfterFunc(tx.timers.M, func() {
 		tx.spinFsm(client_input_timer_m)
 	})
 	tx.mu.Unlock()
