@@ -52,6 +52,9 @@ func init() {
 	SetTimers(t1, t2, t4)
 }
 
+// SetTimers updates legacy startup defaults. It must not run concurrently with
+// legacy constructor/default capture. Existing layers and transactions retain
+// their captured clocks; use WithTransactionLayerTimers for independent values.
 func SetTimers(t1, t2, t4 time.Duration) {
 	T1 = t1
 	T2 = t2
@@ -148,7 +151,8 @@ type ClientTransaction interface {
 }
 
 type baseTx struct {
-	mu sync.Mutex
+	mu     sync.Mutex
+	timers transactionTimerSnapshot
 
 	key    string
 	origin *Request

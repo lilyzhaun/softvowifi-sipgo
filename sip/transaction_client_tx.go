@@ -20,7 +20,12 @@ type ClientTx struct {
 }
 
 func NewClientTx(key string, origin *Request, conn Connection, logger *slog.Logger) *ClientTx {
+	return newClientTx(key, origin, conn, logger, captureLegacyTransactionTimers())
+}
+
+func newClientTx(key string, origin *Request, conn Connection, logger *slog.Logger, timers transactionTimerSnapshot) *ClientTx {
 	tx := &ClientTx{}
+	tx.timers = timers
 	tx.key = key
 	// tx.conn = tpl
 	tx.conn = conn
@@ -42,6 +47,10 @@ func (tx *ClientTx) Init() error {
 	}
 
 	reliable := IsReliable(tx.origin.Transport())
+	retransmit, deadline, retention, deadlineName := tx.timers.A, tx.timers.B, tx.timers.D, "B"
+	if !tx.origin.IsInvite() {
+		retransmit, deadline, retention, deadlineName = tx.timers.E, tx.timers.F, tx.timers.K, "F"
+	}
 	if reliable {
 		tx.mu.Lock()
 		tx.timer_d_time = 0
@@ -54,20 +63,20 @@ func (tx *ClientTx) Init() error {
 		// Timer A - retransmission
 
 		tx.mu.Lock()
-		tx.timer_a_time = Timer_A
+		tx.timer_a_time = retransmit
 
 		tx.timer_a = time.AfterFunc(tx.timer_a_time, func() {
 			tx.spinFsm(client_input_timer_a)
 		})
-		// Timer D is set to 32 seconds for unreliable transports
-		tx.timer_d_time = Timer_D
+		// D retains INVITE failures; K retains non-INVITE final responses.
+		tx.timer_d_time = retention
 		tx.mu.Unlock()
 	}
 
-	// Timer B - timeout
+	// B bounds INVITE Calling; F bounds non-INVITE Trying/Proceeding.
 	tx.mu.Lock()
-	tx.timer_b = time.AfterFunc(Timer_B, func() {
-		tx.spinFsmWithError(client_input_timer_b, fmt.Errorf("Timer_B timed out. %w", ErrTransactionTimeout))
+	tx.timer_b = time.AfterFunc(deadline, func() {
+		tx.spinFsmWithError(client_input_timer_b, fmt.Errorf("Timer_%s timed out. %w", deadlineName, ErrTransactionTimeout))
 	})
 	tx.mu.Unlock()
 	tx.log.Debug("Client transaction initialized", "tx", tx.Key())

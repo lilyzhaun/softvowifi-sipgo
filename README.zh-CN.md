@@ -15,6 +15,8 @@
 - 在关闭事务Done前发布终态Err，终止回调可安全读取Err；客户端显式终止为
   ErrTransactionCanceled，服务端保持ErrTransactionTerminated。
 
+- [每实例事务计时](docs/transaction-timers.md)按层及事务捕获独立策略；非INVITE实际使用E/F/K，临时响应后保持重传。旧全局默认在构造时捕获，既有交换不再动态重读。
+
 上游测试仅保留部分，加上聚焦回归；不能拿本仓CI代替完整上游/运营商验收。
 Go模块声明1.23.0、工具链1.24.2；CI使用Linux/Go1.26。
 

@@ -1,6 +1,7 @@
 package sip
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -189,10 +190,7 @@ func (tx *ServerTx) actRespondComplete() fsmInput {
 				tx.spinFsm(server_input_timer_g)
 			})
 		} else {
-			tx.timer_g_time *= 2
-			if tx.timer_g_time > T2 {
-				tx.timer_g_time = T2
-			}
+			tx.timer_g_time = doubledTimerInterval(tx.timer_g_time, tx.timers.T2)
 
 			tx.timer_g.Reset(tx.timer_g_time)
 		}
@@ -201,8 +199,8 @@ func (tx *ServerTx) actRespondComplete() fsmInput {
 
 	tx.mu.Lock()
 	if tx.timer_h == nil {
-		tx.timer_h = time.AfterFunc(Timer_H, func() {
-			tx.spinFsm(server_input_timer_h)
+		tx.timer_h = time.AfterFunc(tx.timers.H, func() {
+			tx.spinFsmWithError(server_input_timer_h, fmt.Errorf("Timer_H timed out. %w", ErrTransactionTimeout))
 		})
 	}
 	tx.mu.Unlock()
@@ -216,7 +214,7 @@ func (tx *ServerTx) actRespondAccept() fsmInput {
 	}
 
 	tx.mu.Lock()
-	tx.timer_l = time.AfterFunc(Timer_L, func() {
+	tx.timer_l = time.AfterFunc(tx.timers.L, func() {
 		tx.spinFsm(server_input_timer_l)
 	})
 	tx.mu.Unlock()

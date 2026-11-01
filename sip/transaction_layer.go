@@ -28,6 +28,7 @@ type TransactionLayer struct {
 	serverTransactions *transactionStore[*ServerTx]
 
 	terminateOnConnClose bool
+	timers               *transactionTimerSnapshot
 
 	log *slog.Logger
 }
@@ -72,6 +73,10 @@ func NewTransactionLayer(tpl *TransportLayer, options ...TransactionLayerOption)
 
 	for _, o := range options {
 		o(txl)
+	}
+	if txl.timers == nil {
+		value := captureLegacyTransactionTimers()
+		txl.timers = &value
 	}
 
 	//Send all transport messages to our transaction layer
@@ -262,7 +267,7 @@ func (txl *TransactionLayer) serverTxCreate(req *Request, key string) (*ServerTx
 		return nil, fmt.Errorf("server tx get connection failed: %w", err)
 	}
 
-	tx := NewServerTx(key, req, conn, txl.log)
+	tx := newServerTx(key, req, conn, txl.log, *txl.timers)
 	if err := tx.Init(); err != nil {
 		// Init failed: this tx never reaches delete(), so release the connection
 		// reference serverRequestConnection took here (mirrors the conn.TryClose
@@ -342,7 +347,7 @@ func (txl *TransactionLayer) clientTxRequest(ctx context.Context, req *Request, 
 		conn.TryClose()
 		return nil, fmt.Errorf("client transaction %q already exists", key)
 	}
-	tx = NewClientTx(key, req, conn, txl.log)
+	tx = newClientTx(key, req, conn, txl.log, *txl.timers)
 
 	txl.clientTransactions.items[key] = tx
 	tx.OnTerminate(txl.clientTxTerminate)
